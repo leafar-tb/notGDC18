@@ -2,6 +2,25 @@
 #define SCREEN_WIDTH 320
 #define SCREEN_HEIGHT 200
 
+#define	Black           0
+#define	Blue            1
+#define	Green           2
+#define	Cyan            3
+#define	Red             4
+#define	Magenta         5
+#define	Brown           6
+#define	LightGray       7
+#define	DarkGray        8
+#define	LightBlue       9
+#define	LightGreen      10
+#define	LightCyan       11
+#define	LightRed        12
+#define	LightMagenta    13
+#define	Yellow          14
+#define	White           15
+#define Orange          42
+#define Yellow2         44
+
 // set up segment registers for the screen and double buffer
 // segments 0 and 1 are in use by bios and our program
 // so we use segment 2 for our double-buffering
@@ -33,6 +52,26 @@ static void textMode() {
 
 //###################################################
 
+// set segment for drawing to screen
+static void beginDrawDirect() {
+    asm volatile (
+        "mov $0xA000, %%ax;"
+        "mov %%ax, %%es;"
+        : : : "%ax"
+    );
+}
+
+// reset segment for drawing to off-screen
+static void endDrawDirect() {
+    asm volatile (
+        "mov $0x2000, %%ax;"
+        "mov %%ax, %%es;"
+        : : : "%ax"
+    );
+}
+
+//###################################################
+
 static void setPixel(short x, short y, byte colour) {
     asm volatile (
         "mov %1, %%es:(%%bx);"
@@ -54,6 +93,21 @@ static void fillArea(short leftx, short topy, ushort width, ushort height, byte 
 
 //###################################################
 
+static void vsync() {
+    asm volatile (
+        "1: "
+        "mov $0x3DA, %%dx;"
+        "in %%dx, %%al;" // vga register
+        "and $0x8, %%al;" // bit 3 indicates vertical retrace
+        "jz 1b;"
+        : : : "ax", "dx"
+    );
+}
+
+//###################################################
+
+// operations on the display buffer have undefined behaviour when in direct draw mode
+
 // fills the off-screen buffer with colour
 static void clearDisplayBuffer(byte colour) {
     uint col = ( colour << 8 ) | colour;
@@ -65,17 +119,6 @@ static void clearDisplayBuffer(byte colour) {
         "rep"
         " stosl;"
         : : "a"(col) : "%ecx", "%edi", "memory"
-    );
-}
-
-static void vsync() {
-    asm volatile (
-        "1: "
-        "mov $0x3DA, %%dx;"
-        "in %%dx, %%al;" // vga register
-        "and $0x8, %%al;" // bit 3 indicates vertical retrace
-        "jz 1b;"
-        : : : "ax", "dx"
     );
 }
 
