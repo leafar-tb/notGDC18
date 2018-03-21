@@ -7,7 +7,52 @@ static void print(char* string) {
     );
 }
 
+static void endl() {
+    asm volatile (
+        "mov $0x02, %%ah;" // print char in dl
+        "mov $0x0A, %%dl;" // \n
+        "int $0x21;"
+        : : : "ah", "dl"
+    );
+}
+
+static void println(char* string) {
+    print(string);
+    endl();
+}
+
 //###################################################
+
+// layout expected by DOS buffered input call
+struct KeyBuffer {
+    byte maxLength;
+    byte count;
+    char data[256];
+};
+
+// set up max length and make sure data is always terminated with '$'
+static struct KeyBuffer inputBuffer = {255, 0, {[255]='$'}};
+
+static void bufferedInput() {
+    asm volatile (
+        "mov $0x0A, %%ah;" // fill KeyBuffer at address DS:DX
+        "int $0x21;"
+        : : "d"(&inputBuffer) : "ah", "memory"
+    );
+    // input is confirmed with enter, but cursor stays in line
+    endl();
+    // replace terminating '\r' with '$'
+    inputBuffer.data[inputBuffer.count] = '$';
+}
+
+static void prompt() {
+    print("> $");
+    bufferedInput();
+}
+
+//###################################################
+
+// single key input
 
 static bool keyInputAvailable() {
     bool result;
