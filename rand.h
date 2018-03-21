@@ -20,3 +20,9 @@ static uint stb_randLCG(void) {
 static bool coinFlip() {
     return stb_randLCG() & 1;
 }
+
+// random integer in [min, max[
+static short randRange(short min, short max) {
+    short delta = max - min;
+    return min + ( stb_randLCG() % delta );
+}
