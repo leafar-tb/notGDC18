@@ -27,11 +27,37 @@ static void drawClouds() {
     }
 }
 
+static void drawFlowers() {
+    static const byte flowerColours[8] = {Red, Blue, Magenta, Yellow, Orange, LightMagenta, LightRed, LightBlue};
+    REPEAT(40) {
+        short x = randRange(0, SCREEN_WIDTH-5);
+        short y = randRange(SKY_HEIGHT, SCREEN_HEIGHT-5);
+        fillArea(x, y, 5, 5, flowerColours[stb_randLCG() & 7]);
+        setPixel(x+2, y+2, Black);
+    }
+}
+
+static void drawTrees() {
+    static const short crownDim = 30;
+    static const short trunkH = 50;
+    static const short trunkW = 14;
+
+    short x = randRange(45, 55);
+    REPEAT(3) {
+        short y = randRange(0, SCREEN_HEIGHT - (crownDim+trunkH));
+        fillArea(x, y, crownDim, crownDim, LightGreen); //crown
+        fillArea(x + (crownDim-trunkW)/2, y+crownDim, trunkW, trunkH, Brown); // trunk
+        x <<= 1;
+    }
+}
+
 static void drawSpring() {
     fillArea(0, 0, SCREEN_WIDTH, SKY_HEIGHT, LightBlue);
     fillArea(20, 20, 20, 20, Yellow); // Sun
     drawClouds();
     fillArea(0, SKY_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT-SKY_HEIGHT, Green);
+    drawFlowers();
+    drawTrees();
 }
 
 #define HIVE_WIDTH 30
