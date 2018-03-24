@@ -10,6 +10,11 @@ typedef byte bool;
 
 //###################################################
 
+#define MIN(X, Y) ( (X) < (Y) ? (X) : (Y) )
+#define MAX(X, Y) ( (X) > (Y) ? (X) : (Y) )
+
+#define CEIL_DIV(VAL, DIV) ( ( (VAL) + (DIV) - 1 ) / (DIV) )
+
 static short sign(short in) {
     short retval;
     asm (

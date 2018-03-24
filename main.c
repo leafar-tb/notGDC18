@@ -43,16 +43,19 @@ struct {
     ushort growRate;
 
     ushort cells;
+    ushort plannedCells;
     ushort honeyStores;
 } hive = {
     // init with defaults
     .population = 1000,
     .workers = 300,
     .gatherers = 700,
+    .draftTo = GATHERER,
 
     .growRate = 100,
 
     .cells = 500,
+    .plannedCells = 0,
     .honeyStores = 200
 };
 
@@ -83,23 +86,50 @@ static void gameTick() {
         return;
     lastGameTick = clockTicks();
 
-    ushort newHoney = hive.gatherers >> 1;
-    ushort honeyConsumed = hive.population >> 3;
+    ushort newHoney = hive.gatherers / 2;
+    ushort honeyConsumed = CEIL_DIV(hive.population, 8);
     if(newHoney >= honeyConsumed) { // net gain
         checkedAdd(&hive.honeyStores, newHoney - honeyConsumed, hive.cells);
     } else if(honeyConsumed - newHoney <= hive.honeyStores) { // balance with stores
         hive.honeyStores -= honeyConsumed - newHoney;
     } else { // not enough
-        ushort missing = honeyConsumed - newHoney - hive.honeyStores;
+        ushort missingHoney = honeyConsumed - newHoney - hive.honeyStores;
         hive.honeyStores = 0;
-        //TODO bees starve
+
+        ushort starved = MIN(missingHoney * 8, hive.population);
+        hive.population -= starved;
+
+        if(starved <= hive.workers) {
+            hive.workers -= starved;
+        } else {
+            hive.gatherers -= starved - hive.workers;
+            hive.workers = 0;
+        }
+
+        if(hive.population == 0)
+            exit(); // TODO proper game over screen
     }
 
-    hive.population += hive.growRate;
-    hive.workers += hive.growRate;
+    // new bees need honey and worker's care
+    ushort newBees = MIN(hive.growRate, hive.honeyStores / 2);
+    newBees = MIN(newBees, hive.workers);
+    newBees = MIN(newBees, MAX_USHORT - hive.population); // keep limit
 
-    checkedAdd(&hive.cells, hive.workers >> 1, MAX_USHORT);
-    checkedAdd(&hive.honeyStores, hive.gatherers >> 1, hive.cells);
+    hive.population += newBees;
+    switch(hive.draftTo) {
+        case WORKER: hive.workers += newBees; break;
+        case GATHERER: hive.gatherers += newBees; break;
+    }
+    hive.honeyStores -= newBees * 2;
+    ushort occupiedWorkers = newBees;
+
+    // building new cells needs workers, which consume extra honey in the effort
+    ushort newCells = MIN(hive.plannedCells - hive.cells, hive.workers - occupiedWorkers);
+    if(CEIL_DIV(newCells, 4) > hive.honeyStores)
+        newCells = hive.honeyStores * 4;
+    newCells = MIN(newCells, MAX_USHORT - hive.cells);
+    hive.cells += newCells;
+    hive.honeyStores -= CEIL_DIV(newCells, 4);
 }
 
 //###################################################
