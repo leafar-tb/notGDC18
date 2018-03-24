@@ -29,6 +29,81 @@ void exit() {
 
 //###################################################
 
+typedef enum {
+    WORKER,
+    GATHERER
+} BeeType;
+
+struct {
+    ushort population;
+    ushort workers;
+    ushort gatherers;
+    BeeType draftTo;
+
+    ushort growRate;
+
+    ushort cells;
+    ushort honeyStores;
+} hive = {
+    // init with defaults
+    .population = 1000,
+    .workers = 300,
+    .gatherers = 700,
+
+    .growRate = 100,
+
+    .cells = 500,
+    .honeyStores = 200
+};
+
+//###################################################
+
+// ~18 clock ticks per second
+#define CLOCK_TICKS_PER_GAME_TICK ( 20 * 18 )
+
+// prevent overflow in add
+static ushort checkedAdd(ushort* val, ushort inc, ushort limit) {
+    if(limit-inc > *val)
+        *val += inc;
+    else
+        *val = limit;
+}
+
+static uint lastGameTick;
+
+// Wikipedia:
+// average population of a healthy hive in midsummer may be as high as 40,000 to 80,000 bees.
+// On average during the year, about one percent of a colony's worker bees die naturally per day.
+// At the height of the season, the queen may lay over 2,500 eggs per day
+// honey consumed during the winter [..] ranges in temperate climates from 15 to 50 kilograms
+
+static void gameTick() {
+    //TODO timer will eventually overflow
+    if(lastGameTick + CLOCK_TICKS_PER_GAME_TICK > clockTicks())
+        return;
+    lastGameTick = clockTicks();
+
+    ushort newHoney = hive.gatherers >> 1;
+    ushort honeyConsumed = hive.population >> 3;
+    if(newHoney >= honeyConsumed) { // net gain
+        checkedAdd(&hive.honeyStores, newHoney - honeyConsumed, hive.cells);
+    } else if(honeyConsumed - newHoney <= hive.honeyStores) { // balance with stores
+        hive.honeyStores -= honeyConsumed - newHoney;
+    } else { // not enough
+        ushort missing = honeyConsumed - newHoney - hive.honeyStores;
+        hive.honeyStores = 0;
+        //TODO bees starve
+    }
+
+    hive.population += hive.growRate;
+    hive.workers += hive.growRate;
+
+    checkedAdd(&hive.cells, hive.workers >> 1, MAX_USHORT);
+    checkedAdd(&hive.honeyStores, hive.gatherers >> 1, hive.cells);
+}
+
+//###################################################
+
 #define SKY_HEIGHT 50
 
 static void drawClouds() {
@@ -102,11 +177,20 @@ static void drawBees() {
 
 //###################################################
 
-struct {
-    ushort population;
-    ushort storageCapacity;
-    ushort honeyStores;
-} hive;
+static void printLabeled(char* str, ushort n) {
+    print(str);
+    print_ushort(n);
+    endl();
+}
+
+void printHiveStatus() {
+    printLabeled("Population $", hive.population);
+    printLabeled("Workers $", hive.workers);
+    printLabeled("Gatherers $", hive.gatherers);
+    printLabeled("Grow Rate $", hive.growRate);
+    printLabeled("Cells $", hive.cells);
+    printLabeled("Honey stored $", hive.honeyStores);
+}
 
 //###################################################
 
@@ -116,12 +200,8 @@ typedef struct {
     bool exactMatch; // is cmdStr a prefix or the full command?
 } Command;
 
-void test() {
-    println("test$");
-}
-
 Command consoleCommands[] = {
-    {"TEST$", &test, true}
+    {"STAT$", &printHiveStatus, true}
 };
 
 static void console() {
@@ -154,6 +234,7 @@ static void console() {
             println("Sorry, I didn't understand that.$");
     }
 
+    lastGameTick = clockTicks(); // don't count time in menu
     videoMode();
     #undef CMD
 }
@@ -163,12 +244,15 @@ static void console() {
 void dosmain(void) {
     displayInit();
     stb__rand_seed = clockTicks();
+    lastGameTick = clockTicks();
 
     drawSpring();
     drawHive();
 
     videoMode();
     while(true) {
+        gameTick();
+
         vsync();
         showDisplayBuffer();
         drawBees();

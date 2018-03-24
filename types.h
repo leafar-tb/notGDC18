@@ -6,6 +6,8 @@ typedef byte bool;
 #define true 1
 #define false 0
 
+#define MAX_USHORT ( ( 1 << 16 ) - 1 )
+
 //###################################################
 
 static short sign(short in) {

@@ -22,12 +22,12 @@ static uint cpuTicks() {
 
 static uint clockTicks() {
     uint retVal;
-    asm (
+    asm volatile (
         "mov $0, %%ah;" // read system clock counter
         "int $0x1A;" // BIOS clock services
         // count stored in cx:dx, combined into ecx
         "shl $16, %%ecx;"
         "mov %%dx, %%cx;"
-        : "=c"(retVal) : : "ah", "dx" );
+        : "=c"(retVal) : : "ax", "dx" );
     return retVal;
 }
