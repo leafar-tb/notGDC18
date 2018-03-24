@@ -29,6 +29,13 @@ static void makeUpperCase(char* str) {
     }
 }
 
+static void makeLowerCase(char* str) {
+    for( ; *str != '$'; ++str) {
+        if(*str >= 'A' && *str <= 'Z')
+            *str += 'a' - 'A'; // 'a' > 'A'
+    }
+}
+
 static ushort strLen(char* str) {
     ushort len = 0;
     while(*str != '$') {

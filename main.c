@@ -55,7 +55,7 @@ struct {
     .growRate = 100,
 
     .cells = 500,
-    .plannedCells = 0,
+    .plannedCells = 500,
     .honeyStores = 200
 };
 
@@ -218,56 +218,124 @@ void printHiveStatus() {
     printLabeled("Workers $", hive.workers);
     printLabeled("Gatherers $", hive.gatherers);
     printLabeled("Grow Rate $", hive.growRate);
+    print("Drafting $");
+    switch(hive.draftTo) {
+        case WORKER : println("Workers $"); break;
+        case GATHERER : println("Gatherers $"); break;
+    }
+
     printLabeled("Cells $", hive.cells);
+    printLabeled("Planned Cells $", hive.plannedCells);
     printLabeled("Honey stored $", hive.honeyStores);
 }
+
+void setGrowRate(ushort newRate) {
+    hive.growRate = newRate;
+    printLabeled("New grow rate is $", newRate);
+}
+
+void draftGatherers() {
+    hive.draftTo = GATHERER;
+    println("New bees will gather honey.$");
+}
+
+void draftWorkers() {
+    hive.draftTo = WORKER;
+    println("New bees will work in the hive.$");
+}
+
+void planCells(ushort extraCells) {
+    checkedAdd(&hive.plannedCells, extraCells, MAX_USHORT);
+    printLabeled("Target number of cells is now $", hive.plannedCells);
+    printLabeled("Current number of cells is $", hive.cells);
+}
+
+void unplanCells(ushort cancelledCells) {
+    hive.plannedCells -= MIN(cancelledCells, hive.plannedCells);
+    hive.plannedCells = MAX(hive.cells, hive.plannedCells); // can't deconstruct cells
+    printLabeled("Target number of cells is now $", hive.plannedCells);
+    printLabeled("Current number of cells is $", hive.cells);
+}
+
+void consoleHelp();
 
 //###################################################
 
 typedef struct {
     char* cmdStr;
-    void (*callback)(void);
+    void *callback;
     bool exactMatch; // is cmdStr a prefix or the full command?
 } Command;
 
+typedef void (*exactCommandFun)(void);
+typedef void (*prefixCommandFun)(ushort);
+
 Command consoleCommands[] = {
-    {"STAT$", &printHiveStatus, true}
+    {"stat$", &printHiveStatus, true},
+    {"draft gather$", &draftGatherers, true},
+    {"draft work$", &draftWorkers, true},
+    {"set grow rate $", &setGrowRate, false},
+    {"plan cells $", &planCells, false},
+    {"unplan cells $", &unplanCells, false},
+    {"help$", &consoleHelp, true},
 };
 
+#define CMD consoleCommands
+
+void consoleHelp() {
+    for(uint i = 0; i < sizeof(CMD)/sizeof(Command); ++i) {
+        if(CMD[i].exactMatch)
+            println(CMD[i].cmdStr);
+        else {
+            print(CMD[i].cmdStr);
+            println("N$");
+        }
+    }
+    endl();
+    println("replace 'N' with a number$");
+    println("'done' to return to the game screen$");
+    println("'exit' to return to DOS$");
+}
+
 static void console() {
-    #define CMD consoleCommands
     textMode();
-    println("What do you want to do?$");
+    println("What do you want to do? ('help' for list of commands)$");
     while(true) {
         prompt();
-        makeUpperCase(USER_INPUT);
+        makeLowerCase(USER_INPUT);
 
         bool matched = false;
-        for(uint i = 0; i < sizeof(consoleCommands)/sizeof(Command); ++i) {
+        for(uint i = 0; i < sizeof(CMD)/sizeof(Command); ++i) {
             if(CMD[i].exactMatch && strEquals(USER_INPUT, CMD[i].cmdStr)) {
-                (*CMD[i].callback)();
+                (*(exactCommandFun)CMD[i].callback)();
                 matched = true;
                 break;
             }
             if(!CMD[i].exactMatch && startsWith(USER_INPUT, CMD[i].cmdStr)) {
-                (*CMD[i].callback)();
+                char* afterPrefix = USER_INPUT + strLen(CMD[i].cmdStr);
+                ushort param;
+                if( parse_ushort(afterPrefix, &param) )
+                    (*(prefixCommandFun)CMD[i].callback)(param);
+                else
+                    println("Error when trying to parse number.$");
                 matched = true;
                 break;
             }
         }
 
-        if( strEquals(USER_INPUT, "DONE$") )
+        if( strEquals(USER_INPUT, "done$") )
             break;
-        if( strEquals(USER_INPUT, "EXIT$") )
+        if( strEquals(USER_INPUT, "exit$") )
             exit();
         if(!matched)
-            println("Sorry, I didn't understand that.$");
+            println("Sorry, I didn't understand that. ('help' for list of commands)$");
     }
 
     lastGameTick = clockTicks(); // don't count time in menu
     videoMode();
-    #undef CMD
 }
+
+#undef CMD
 
 //###################################################
 
