@@ -33,6 +33,8 @@ struct KeyBuffer {
 // set up max length and make sure data is always terminated with '$'
 static struct KeyBuffer inputBuffer = {255, 0, {[255]='$'}};
 
+#define USER_INPUT inputBuffer.data
+
 static void bufferedInput() {
     asm volatile (
         "mov $0x0A, %%ah;" // fill KeyBuffer at address DS:DX

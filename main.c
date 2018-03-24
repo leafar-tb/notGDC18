@@ -11,6 +11,7 @@ asm (".code16gcc;"
 
 // these aren't headers as such, just code moved to different files for organisation
 #include "types.h"
+#include "string.h"
 #include "rand.h"
 #include "display.h"
 #include "text_io.h"
@@ -109,6 +110,56 @@ struct {
 
 //###################################################
 
+typedef struct {
+    char* cmdStr;
+    void (*callback)(void);
+    bool exactMatch; // is cmdStr a prefix or the full command?
+} Command;
+
+void test() {
+    println("test$");
+}
+
+Command consoleCommands[] = {
+    {"TEST$", &test, true}
+};
+
+static void console() {
+    #define CMD consoleCommands
+    textMode();
+    println("What do you want to do?$");
+    while(true) {
+        prompt();
+        makeUpperCase(USER_INPUT);
+
+        bool matched = false;
+        for(uint i = 0; i < sizeof(consoleCommands)/sizeof(Command); ++i) {
+            if(CMD[i].exactMatch && strEquals(USER_INPUT, CMD[i].cmdStr)) {
+                (*CMD[i].callback)();
+                matched = true;
+                break;
+            }
+            if(!CMD[i].exactMatch && startsWith(USER_INPUT, CMD[i].cmdStr)) {
+                (*CMD[i].callback)();
+                matched = true;
+                break;
+            }
+        }
+
+        if( strEquals(USER_INPUT, "DONE$") )
+            break;
+        if( strEquals(USER_INPUT, "EXIT$") )
+            exit();
+        if(!matched)
+            println("Sorry, I didn't understand that.$");
+    }
+
+    videoMode();
+    #undef CMD
+}
+
+//###################################################
+
 void dosmain(void) {
     displayInit();
     stb__rand_seed = clockTicks();
@@ -121,6 +172,11 @@ void dosmain(void) {
         vsync();
         showDisplayBuffer();
         drawBees();
+
+        while(keyInputAvailable()) {
+            if(readASCII_blocking() == ' ')
+                console();
+        }
 
         //waitMillis(50);
     }
