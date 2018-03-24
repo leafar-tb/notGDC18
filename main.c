@@ -1,7 +1,6 @@
 asm (".code16gcc;"
-     "call  dosmain;"
-     "mov   $0x4C, %ah;"
-     "int   $0x21;");
+     "call dosmain;"
+     "call exit;");
 
 // gcc doesn't allow clobbering input registers
 // so we just do an empty asm for clobbering those
@@ -16,6 +15,16 @@ asm (".code16gcc;"
 #include "display.h"
 #include "text_io.h"
 #include "time.h"
+
+//###################################################
+
+void exit() {
+    textMode();
+    asm volatile (
+        "mov   $0x4C00, %ax;"
+        "int   $0x21;"
+    );
+}
 
 //###################################################
 
@@ -100,7 +109,7 @@ struct {
 
 //###################################################
 
-int dosmain(void) {
+void dosmain(void) {
     displayInit();
     stb__rand_seed = clockTicks();
 
@@ -113,8 +122,6 @@ int dosmain(void) {
         showDisplayBuffer();
         drawBees();
 
-        waitMillis(50);
+        //waitMillis(50);
     }
-
-    return 0;
 }
