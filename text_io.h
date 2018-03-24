@@ -7,14 +7,15 @@ static void print(char* string) {
     );
 }
 
-static void endl() {
+static void printCharacter(char chr) {
     asm volatile (
         "mov $0x02, %%ah;" // print char in dl
-        "mov $0x0A, %%dl;" // \n
         "int $0x21;"
-        : : : "ah", "dl"
+        : : "d"(chr) : "ah"
     );
 }
+
+#define endl() printCharacter('\n')
 
 static void println(char* string) {
     print(string);
@@ -50,6 +51,23 @@ static void bufferedInput() {
 static void prompt() {
     print("> $");
     bufferedInput();
+}
+
+//###################################################
+
+static void print_ushort(ushort val) {
+    if(val == 0) {
+        printCharacter('0');
+        return;
+    }
+
+    ushort pow10 = 10000;
+    while(val < pow10)
+        pow10 /= 10;
+    for(; pow10 > 0; pow10 /= 10) {
+        printCharacter('0' + val/pow10);
+        val = val % pow10;
+    }
 }
 
 //###################################################

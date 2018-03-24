@@ -28,3 +28,33 @@ static void makeUpperCase(char* str) {
             *str -= 'a' - 'A'; // 'a' > 'A'
     }
 }
+
+static ushort strLen(char* str) {
+    ushort len = 0;
+    while(*str != '$') {
+        ++len;
+        ++str;
+    }
+    return len;
+}
+
+//###################################################
+
+#define isdigit(chr) ( (chr) >= '0' && (chr) <= '9' )
+
+static bool parse_ushort(char* str, ushort* result) {
+    if(strLen(str) == 0)
+        return false;
+
+    ushort retVal = 0;
+    for( ; *str != '$'; ++str) {
+        if(!isdigit(*str))
+            return false;
+        //TODO check overflow
+        retVal *= 10;
+        retVal += (*str) - '0';
+    }
+
+    *result = retVal;
+    return true;
+}
