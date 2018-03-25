@@ -112,15 +112,19 @@ void nextSeason() {
 // ~18 clock ticks per second
 #define CLOCK_TICKS_PER_GAME_TICK ( 10 * 18 )
 
-// prevent overflow in add
-static void checkedAdd(ushort* val, ushort inc, ushort limit) {
-    if(limit-inc > *val)
+// prevent overflow in add; return 'spillage'
+static ushort checkedAdd(ushort* val, ushort inc, ushort limit) {
+    if(limit-inc > *val) {
         *val += inc;
-    else
+        return 0;
+    } else {
+        inc -= limit - *val;
         *val = limit;
+        return inc;
+    }
 }
 
-// prevent underflow in sub; return remaining decrement
+// prevent underflow in sub; return 'spillage'
 static ushort checkedSub(ushort* val, ushort dec) {
     if(dec > *val) {
         dec -= *val;
@@ -166,8 +170,8 @@ static void gameTick() {
     ushort honeyConsumed = CEIL_DIV(hive.population, 8);
     // clear production with usage
     honeyConsumed = checkedSub(&newHoney, honeyConsumed);
-    // add remaining net gain
-    checkedAdd(&hive.honeyStores, newHoney, hive.cells);
+    // add remaining net gain; keep spillage
+    newHoney = checkedAdd(&hive.honeyStores, newHoney, hive.cells);
     // sub remaining net loss
     honeyConsumed = checkedSub(&hive.honeyStores, honeyConsumed);
     // stores were too small
@@ -208,6 +212,9 @@ static void gameTick() {
     newCells = MIN(newCells, MAX_USHORT - hive.cells);
     hive.cells += newCells;
     hive.honeyStores -= CEIL_DIV(newCells, 4);
+
+    // if there was spillage earlier, try storing it now
+    checkedAdd(&hive.honeyStores, newHoney, hive.cells);
 
     // some bees die naturally
     ushort died = hive.workers / 128;
