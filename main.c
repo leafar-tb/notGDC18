@@ -31,7 +31,8 @@ void exit() {
 
 typedef enum {
     WORKER,
-    GATHERER
+    GATHERER,
+    NO_WORK,
 } BeeType;
 
 struct {
@@ -50,7 +51,7 @@ struct {
     .population = 1000,
     .workers = 300,
     .gatherers = 700,
-    .draftTo = GATHERER,
+    .draftTo = NO_WORK,
 
     .growRate = 100,
 
@@ -131,6 +132,7 @@ static void gameTick() {
     switch(hive.draftTo) {
         case WORKER: hive.workers += newBees; break;
         case GATHERER: hive.gatherers += newBees; break;
+        case NO_WORK: break;
     }
     hive.honeyStores -= newBees * 2;
     ushort occupiedWorkers = newBees;
@@ -142,6 +144,18 @@ static void gameTick() {
     newCells = MIN(newCells, MAX_USHORT - hive.cells);
     hive.cells += newCells;
     hive.honeyStores -= CEIL_DIV(newCells, 4);
+
+    // some bees die naturally
+    ushort died = hive.workers / 128;
+    hive.workers -= died;
+    hive.population -= died;
+
+    died = hive.gatherers / 128;
+    hive.gatherers -= died;
+    hive.population -= died;
+
+    died = unassignedBees() / 128;
+    hive.population -= died;
 }
 
 //###################################################
@@ -235,6 +249,7 @@ void printHiveStatus() {
     switch(hive.draftTo) {
         case WORKER : println("Workers $"); break;
         case GATHERER : println("Gatherers $"); break;
+        case NO_WORK : println("Unassigned $"); break;
     }
 
     printLabeled("Cells $", hive.cells);
@@ -278,6 +293,11 @@ void makeWorkers(short delta) {
     printLabeled("Unassigned $", unassignedBees());
 }
 
+void draftUnassigned() {
+    hive.draftTo = NO_WORK;
+    println("New bees will wait for assignment.$");
+}
+
 void planCells(short extraCells) {
     if(extraCells >= 0)
         checkedAdd(&hive.plannedCells, extraCells, MAX_USHORT);
@@ -306,6 +326,7 @@ Command consoleCommands[] = {
     {"stat$", &printHiveStatus, true},
     {"draft gather$", &draftGatherers, true},
     {"draft work$", &draftWorkers, true},
+    {"draft none$", &draftUnassigned, true},
     {"make gather $", &makeGatherers, false},
     {"make work $", &makeWorkers, false},
     {"grow rate $", &setGrowRate, false},
@@ -369,7 +390,7 @@ static void console() {
             println("Sorry, I didn't understand that. ('help' for list of commands)$");
     }
 
-    lastGameTick = clockTicks(); // don't count time in menu
+    //lastGameTick = clockTicks(); // don't count time in menu
     videoMode();
 }
 
