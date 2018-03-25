@@ -65,3 +65,31 @@ static bool parse_ushort(char* str, ushort* result) {
     *result = retVal;
     return true;
 }
+
+static bool parse_short(char* str, short* result) {
+    bool negative = false;
+    if(*str == '+') {
+        ++str;
+    } else if(*str == '-') {
+        ++str;
+        negative = true;
+    }
+
+    if(strLen(str) == 0)
+        return false;
+
+    short retVal = 0;
+    for( ; *str != '$'; ++str) {
+        if(!isdigit(*str))
+            return false;
+        //TODO check overflow
+        retVal *= 10;
+        retVal += (*str) - '0';
+    }
+
+    if(negative)
+        *result = -retVal;
+    else
+        *result = retVal;
+    return true;
+}

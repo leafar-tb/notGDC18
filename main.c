@@ -59,17 +59,33 @@ struct {
     .honeyStores = 200
 };
 
+static ushort unassignedBees() {
+    return hive.population - ( hive.workers + hive.gatherers );
+}
+
 //###################################################
 
 // ~18 clock ticks per second
 #define CLOCK_TICKS_PER_GAME_TICK ( 20 * 18 )
 
 // prevent overflow in add
-static ushort checkedAdd(ushort* val, ushort inc, ushort limit) {
+static void checkedAdd(ushort* val, ushort inc, ushort limit) {
     if(limit-inc > *val)
         *val += inc;
     else
         *val = limit;
+}
+
+// prevent underflow in sub; return remaining decrement
+static ushort checkedSub(ushort* val, ushort dec) {
+    if(dec > *val) {
+        dec -= *val;
+        *val = 0;
+        return dec;
+    } else {
+        *val -= dec;
+        return 0;
+    }
 }
 
 static uint lastGameTick;
@@ -88,23 +104,19 @@ static void gameTick() {
 
     ushort newHoney = hive.gatherers / 2;
     ushort honeyConsumed = CEIL_DIV(hive.population, 8);
-    if(newHoney >= honeyConsumed) { // net gain
-        checkedAdd(&hive.honeyStores, newHoney - honeyConsumed, hive.cells);
-    } else if(honeyConsumed - newHoney <= hive.honeyStores) { // balance with stores
-        hive.honeyStores -= honeyConsumed - newHoney;
-    } else { // not enough
-        ushort missingHoney = honeyConsumed - newHoney - hive.honeyStores;
-        hive.honeyStores = 0;
-
-        ushort starved = MIN(missingHoney * 8, hive.population);
+    // clear production with usage
+    honeyConsumed = checkedSub(&newHoney, honeyConsumed);
+    // add remaining net gain
+    checkedAdd(&hive.honeyStores, newHoney, hive.cells);
+    // sub remaining net loss
+    honeyConsumed = checkedSub(&hive.honeyStores, honeyConsumed);
+    // stores were too small
+    if(honeyConsumed) {
+        ushort starved = MIN(honeyConsumed * 8, hive.population);
         hive.population -= starved;
 
-        if(starved <= hive.workers) {
-            hive.workers -= starved;
-        } else {
-            hive.gatherers -= starved - hive.workers;
-            hive.workers = 0;
-        }
+        starved = checkedSub(&hive.workers, starved);
+        checkedSub(&hive.gatherers, starved);
 
         if(hive.population == 0)
             exit(); // TODO proper game over screen
@@ -217,6 +229,7 @@ void printHiveStatus() {
     printLabeled("Population $", hive.population);
     printLabeled("Workers $", hive.workers);
     printLabeled("Gatherers $", hive.gatherers);
+    printLabeled("Unassigned $", unassignedBees());
     printLabeled("Grow Rate $", hive.growRate);
     print("Drafting $");
     switch(hive.draftTo) {
@@ -229,9 +242,12 @@ void printHiveStatus() {
     printLabeled("Honey stored $", hive.honeyStores);
 }
 
-void setGrowRate(ushort newRate) {
-    hive.growRate = newRate;
-    printLabeled("New grow rate is $", newRate);
+void setGrowRate(short newRate) {
+    if(newRate > 0)
+        hive.growRate = newRate;
+    else
+        checkedSub(&hive.growRate, -newRate);
+    printLabeled("New grow rate is $", hive.growRate);
 }
 
 void draftGatherers() {
@@ -239,20 +255,36 @@ void draftGatherers() {
     println("New bees will gather honey.$");
 }
 
+void makeGatherers(short delta) {
+    if(delta > 0) {
+        hive.gatherers += MIN(delta, unassignedBees());
+    } else
+        checkedSub(&hive.gatherers, -delta);
+    printLabeled("Gatherers $", hive.gatherers);
+    printLabeled("Unassigned $", unassignedBees());
+}
+
 void draftWorkers() {
     hive.draftTo = WORKER;
     println("New bees will work in the hive.$");
 }
 
-void planCells(ushort extraCells) {
-    checkedAdd(&hive.plannedCells, extraCells, MAX_USHORT);
-    printLabeled("Target number of cells is now $", hive.plannedCells);
-    printLabeled("Current number of cells is $", hive.cells);
+void makeWorkers(short delta) {
+    if(delta > 0) {
+        hive.workers += MIN(delta, unassignedBees());
+    } else
+        checkedSub(&hive.workers, -delta);
+    printLabeled("Workers $", hive.workers);
+    printLabeled("Unassigned $", unassignedBees());
 }
 
-void unplanCells(ushort cancelledCells) {
-    hive.plannedCells -= MIN(cancelledCells, hive.plannedCells);
-    hive.plannedCells = MAX(hive.cells, hive.plannedCells); // can't deconstruct cells
+void planCells(short extraCells) {
+    if(extraCells >= 0)
+        checkedAdd(&hive.plannedCells, extraCells, MAX_USHORT);
+    else {
+        hive.plannedCells -= MIN(-extraCells, hive.plannedCells);
+        hive.plannedCells = MAX(hive.cells, hive.plannedCells); // can't deconstruct cells
+    }
     printLabeled("Target number of cells is now $", hive.plannedCells);
     printLabeled("Current number of cells is $", hive.cells);
 }
@@ -268,15 +300,16 @@ typedef struct {
 } Command;
 
 typedef void (*exactCommandFun)(void);
-typedef void (*prefixCommandFun)(ushort);
+typedef void (*prefixCommandFun)(short);
 
 Command consoleCommands[] = {
     {"stat$", &printHiveStatus, true},
     {"draft gather$", &draftGatherers, true},
     {"draft work$", &draftWorkers, true},
-    {"set grow rate $", &setGrowRate, false},
+    {"make gather $", &makeGatherers, false},
+    {"make work $", &makeWorkers, false},
+    {"grow rate $", &setGrowRate, false},
     {"plan cells $", &planCells, false},
-    {"unplan cells $", &unplanCells, false},
     {"help$", &consoleHelp, true},
 };
 
@@ -288,7 +321,7 @@ void consoleHelp() {
             println(CMD[i].cmdStr);
         else {
             print(CMD[i].cmdStr);
-            println("N$");
+            println("[-]N$");
         }
     }
     endl();
@@ -313,8 +346,8 @@ static void console() {
             }
             if(!CMD[i].exactMatch && startsWith(USER_INPUT, CMD[i].cmdStr)) {
                 char* afterPrefix = USER_INPUT + strLen(CMD[i].cmdStr);
-                ushort param;
-                if( parse_ushort(afterPrefix, &param) )
+                short param;
+                if( parse_short(afterPrefix, &param) )
                     (*(prefixCommandFun)CMD[i].callback)(param);
                 else
                     println("Error when trying to parse number.$");
@@ -327,6 +360,11 @@ static void console() {
             break;
         if( strEquals(USER_INPUT, "exit$") )
             exit();
+        if(startsWith(USER_INPUT, "ff$") ) { // debug fast-forward
+            matched = true;
+            lastGameTick = 0;
+            gameTick();
+        }
         if(!matched)
             println("Sorry, I didn't understand that. ('help' for list of commands)$");
     }
