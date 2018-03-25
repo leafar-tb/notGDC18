@@ -155,7 +155,14 @@ static void gameTick() {
     }
     ++seasonTicks;
 
-    ushort newHoney = hive.gatherers / 2;
+    ushort newHoney;
+    switch(season) {
+        case SPRING: newHoney = hive.gatherers / 2; break;
+        case SUMMER: newHoney = hive.gatherers; break;
+        case AUTUMN: newHoney = hive.gatherers / 4; break;
+        case WINTER: newHoney = 0; break;
+    }
+
     ushort honeyConsumed = CEIL_DIV(hive.population, 8);
     // clear production with usage
     honeyConsumed = checkedSub(&newHoney, honeyConsumed);
@@ -170,9 +177,14 @@ static void gameTick() {
 
         starved = checkedSub(&hive.workers, starved);
         checkedSub(&hive.gatherers, starved);
+    }
 
-        if(hive.population == 0)
-            exit(); // TODO proper game over screen
+    if(hive.population == 0) {
+        textMode();
+        println("Your hive died.$");
+        println("(Press any key to quit.)$");
+        readASCII_blocking();
+        exit();
     }
 
     // new bees need honey and worker's care
@@ -224,7 +236,7 @@ static void drawClouds() {
 
 static void drawFlowers() {
     static const byte flowerColours[8] = {Red, Blue, Magenta, Yellow, Orange, LightMagenta, LightRed, LightBlue};
-    static const ushort countBy[] = { [SPRING] = 40, [SUMMER] = 80, [AUTUMN] = 50, [WINTER] = 0 };
+    static const ushort countBy[] = { [SPRING] = 40, [SUMMER] = 80, [AUTUMN] = 20, [WINTER] = 0 };
 
     REPEAT(countBy[season]) {
         short x = randRange(0, SCREEN_WIDTH-5);
