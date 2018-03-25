@@ -215,15 +215,15 @@ static void drawHive() {
     fillArea(SCREEN_WIDTH/2 - 2, HIVE_CENTER_Y+HIVE_HEIGHT/2 - 6, 4, 6, Black);
 }
 
-#define N_SCREEN_BEES 50
+#define N_SCREEN_BEES 256
 static ushort screenBees[N_SCREEN_BEES] = {[0 ... N_SCREEN_BEES-1] = (HIVE_CENTER_Y + HIVE_HEIGHT/2) * SCREEN_WIDTH + SCREEN_WIDTH/2};
 
 static void drawBees() {
-    static const short moves[8] = { +1, -1, +SCREEN_WIDTH, -SCREEN_WIDTH, +SCREEN_WIDTH+1, -SCREEN_WIDTH-1, +SCREEN_WIDTH-1, -SCREEN_WIDTH+1};
+    static const short moves[4] = { +1, -1, +SCREEN_WIDTH, -SCREEN_WIDTH};
 
     beginDrawDirect();
-    for(ushort b = 0; b < N_SCREEN_BEES; ++b) {
-        screenBees[b] += moves[stb_randLCG() & 3]; //
+    for(ushort b = 0; b < CEIL_DIV(hive.gatherers, 256); ++b) {
+        screenBees[b] += moves[stb_randLCG() & 3];
         asm ( "mov %1, %%es:(%%bx);"
               : : "b"(screenBees[b]), "r"((byte)Yellow) :
         );
