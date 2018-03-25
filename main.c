@@ -66,6 +66,18 @@ static ushort unassignedBees() {
 
 //###################################################
 
+static enum {
+    SPRING,
+    SUMMER,
+    AUTUMN,
+    WINTER
+} season = SPRING;
+
+#define GAME_TICKS_PER_SEASON 100
+static ushort seasonTicks; // game ticks elapsed in current season
+
+//###################################################
+
 // ~18 clock ticks per second
 #define CLOCK_TICKS_PER_GAME_TICK ( 20 * 18 )
 
@@ -163,16 +175,20 @@ static void gameTick() {
 #define SKY_HEIGHT 50
 
 static void drawClouds() {
-    REPEAT(6) {
-        fillArea(randRange(0, SCREEN_WIDTH), randRange(0, SKY_HEIGHT-15), randRange(10, 50), randRange(5, 15), White);
+    static const ushort countBy[] = { [SPRING] = 6, [SUMMER] = 2, [AUTUMN] = 7, [WINTER] = 10 };
+    REPEAT(countBy[season]) {
+        byte colour = season == WINTER ? LightGray : White;
+        fillArea(randRange(0, SCREEN_WIDTH), randRange(0, SKY_HEIGHT-15), randRange(10, 50), randRange(5, 15), colour);
     }
 }
 
 static void drawFlowers() {
     static const byte flowerColours[8] = {Red, Blue, Magenta, Yellow, Orange, LightMagenta, LightRed, LightBlue};
-    REPEAT(40) {
+    static const ushort countBy[] = { [SPRING] = 30, [SUMMER] = 50, [AUTUMN] = 40, [WINTER] = 0 };
+
+    REPEAT(countBy[season]) {
         short x = randRange(0, SCREEN_WIDTH-5);
-        short y = randRange(SKY_HEIGHT, SCREEN_HEIGHT-5);
+        short y = randRange(SKY_HEIGHT+1, SCREEN_HEIGHT-5);
         fillArea(x, y, 5, 5, flowerColours[stb_randLCG() & 7]);
         setPixel(x+2, y+2, Black);
     }
@@ -182,21 +198,30 @@ static void drawTrees() {
     static const short crownDim = 30;
     static const short trunkH = 50;
     static const short trunkW = 14;
+    static const byte autumnColours[] = {Red, Yellow, Yellow2, Orange};
 
     short x = randRange(45, 55);
     REPEAT(3) {
         short y = randRange(0, SCREEN_HEIGHT - (crownDim+trunkH));
-        fillArea(x, y, crownDim, crownDim, LightGreen); //crown
+        if(season != WINTER) {
+            byte colour = LightGreen;
+            if(season == AUTUMN)
+                colour = autumnColours[y & 3];
+            fillArea(x, y, crownDim, crownDim, colour); //crown
+        }
         fillArea(x + (crownDim-trunkW)/2, y+crownDim, trunkW, trunkH, Brown); // trunk
-        x <<= 1;
+        x *= 2;
     }
 }
 
-static void drawSpring() {
-    fillArea(0, 0, SCREEN_WIDTH, SKY_HEIGHT, LightBlue);
-    fillArea(20, 20, 20, 20, Yellow); // Sun
+static void drawSeasonBackdrop() {
+    static const byte skyColour[] = { [SPRING] = LightBlue, [SUMMER] = LightBlue, [AUTUMN] = Blue, [WINTER] = Blue };
+    static const byte groundColour[] = { [SPRING] = Green, [SUMMER] = Green, [AUTUMN] = Green, [WINTER] = White };
+
+    fillArea(0, 0, SCREEN_WIDTH, SKY_HEIGHT, skyColour[season]);
+    fillArea(20, 20, 20, 20, Yellow2); // Sun
     drawClouds();
-    fillArea(0, SKY_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT-SKY_HEIGHT, Green);
+    fillArea(0, SKY_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT-SKY_HEIGHT, groundColour[season]);
     drawFlowers();
     drawTrees();
 }
@@ -220,6 +245,9 @@ static ushort screenBees[N_SCREEN_BEES] = {[0 ... N_SCREEN_BEES-1] = (HIVE_CENTE
 
 static void drawBees() {
     static const short moves[4] = { +1, -1, +SCREEN_WIDTH, -SCREEN_WIDTH};
+
+    if(season == WINTER)
+        return;
 
     beginDrawDirect();
     for(ushort b = 0; b < CEIL_DIV(hive.gatherers, 256); ++b) {
@@ -403,7 +431,7 @@ void dosmain(void) {
     stb__rand_seed = clockTicks();
     lastGameTick = clockTicks();
 
-    drawSpring();
+    drawSeasonBackdrop();
     drawHive();
 
     videoMode();
