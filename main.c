@@ -73,13 +73,41 @@ static enum {
     WINTER
 } season = SPRING;
 
-#define GAME_TICKS_PER_SEASON 100
+#define GAME_TICKS_PER_SEASON 60
 static ushort seasonTicks; // game ticks elapsed in current season
 
 //###################################################
 
+#define HIVE_WIDTH 30
+#define HIVE_H_ROWS 9
+#define HIVE_HEIGHT (HIVE_H_ROWS * 4)
+#define HIVE_CENTER_Y 120
+
+#define N_SCREEN_BEES 256
+static ushort screenBees[N_SCREEN_BEES] = {[0 ... N_SCREEN_BEES-1] = (HIVE_CENTER_Y + HIVE_HEIGHT/2) * SCREEN_WIDTH + SCREEN_WIDTH/2};
+
+//###################################################
+
+static void drawSeasonBackdrop();
+static void drawHive();
+
+void nextSeason() {
+    season = ( season + 1 ) % 4;
+    seasonTicks = 0;
+
+    drawSeasonBackdrop();
+    drawHive();
+
+    if(season == WINTER) { // reset bee position for spring
+        for(ushort b = 0; b < N_SCREEN_BEES; ++b)
+            screenBees[b] = (HIVE_CENTER_Y + HIVE_HEIGHT/2) * SCREEN_WIDTH + SCREEN_WIDTH/2;
+    }
+}
+
+//###################################################
+
 // ~18 clock ticks per second
-#define CLOCK_TICKS_PER_GAME_TICK ( 20 * 18 )
+#define CLOCK_TICKS_PER_GAME_TICK ( 10 * 18 )
 
 // prevent overflow in add
 static void checkedAdd(ushort* val, ushort inc, ushort limit) {
@@ -113,7 +141,11 @@ static void gameTick() {
     //TODO timer will eventually overflow
     if(lastGameTick + CLOCK_TICKS_PER_GAME_TICK > clockTicks())
         return;
+
     lastGameTick = clockTicks();
+    if(seasonTicks >= GAME_TICKS_PER_SEASON)
+        nextSeason();
+    ++seasonTicks;
 
     ushort newHoney = hive.gatherers / 2;
     ushort honeyConsumed = CEIL_DIV(hive.population, 8);
@@ -184,7 +216,7 @@ static void drawClouds() {
 
 static void drawFlowers() {
     static const byte flowerColours[8] = {Red, Blue, Magenta, Yellow, Orange, LightMagenta, LightRed, LightBlue};
-    static const ushort countBy[] = { [SPRING] = 30, [SUMMER] = 50, [AUTUMN] = 40, [WINTER] = 0 };
+    static const ushort countBy[] = { [SPRING] = 40, [SUMMER] = 80, [AUTUMN] = 50, [WINTER] = 0 };
 
     REPEAT(countBy[season]) {
         short x = randRange(0, SCREEN_WIDTH-5);
@@ -194,11 +226,16 @@ static void drawFlowers() {
     }
 }
 
+static uint treeSeed;
 static void drawTrees() {
     static const short crownDim = 30;
     static const short trunkH = 50;
     static const short trunkW = 14;
     static const byte autumnColours[] = {Red, Yellow, Yellow2, Orange};
+
+    // fixed seed, so trees don't move between seasons
+    uint curSeed = stb__rand_seed;
+    stb__rand_seed = treeSeed;
 
     short x = randRange(45, 55);
     REPEAT(3) {
@@ -212,6 +249,8 @@ static void drawTrees() {
         fillArea(x + (crownDim-trunkW)/2, y+crownDim, trunkW, trunkH, Brown); // trunk
         x *= 2;
     }
+
+    stb__rand_seed = curSeed;
 }
 
 static void drawSeasonBackdrop() {
@@ -226,11 +265,6 @@ static void drawSeasonBackdrop() {
     drawTrees();
 }
 
-#define HIVE_WIDTH 30
-#define HIVE_H_ROWS 9
-#define HIVE_HEIGHT (HIVE_H_ROWS * 4)
-#define HIVE_CENTER_Y 120
-
 static void drawHive() {
     fillArea((SCREEN_WIDTH - HIVE_WIDTH)/2, HIVE_CENTER_Y - HIVE_HEIGHT/2, HIVE_WIDTH, HIVE_HEIGHT, Brown);
     for(uint i = 0; i < HIVE_H_ROWS; ++i) {
@@ -239,9 +273,6 @@ static void drawHive() {
     }
     fillArea(SCREEN_WIDTH/2 - 2, HIVE_CENTER_Y+HIVE_HEIGHT/2 - 6, 4, 6, Black);
 }
-
-#define N_SCREEN_BEES 256
-static ushort screenBees[N_SCREEN_BEES] = {[0 ... N_SCREEN_BEES-1] = (HIVE_CENTER_Y + HIVE_HEIGHT/2) * SCREEN_WIDTH + SCREEN_WIDTH/2};
 
 static void drawBees() {
     static const short moves[4] = { +1, -1, +SCREEN_WIDTH, -SCREEN_WIDTH};
@@ -409,16 +440,21 @@ static void console() {
             break;
         if( strEquals(USER_INPUT, "exit$") )
             exit();
-        if(startsWith(USER_INPUT, "ff$") ) { // debug fast-forward
+        if( strEquals(USER_INPUT, "ff$") ) { // debug fast-forward
             matched = true;
             lastGameTick = 0;
             gameTick();
         }
+        if( strEquals(USER_INPUT, "nexts$") ) { // debug next season
+            matched = true;
+            nextSeason();
+            break;
+        }
+
         if(!matched)
             println("Sorry, I didn't understand that. ('help' for list of commands)$");
     }
 
-    //lastGameTick = clockTicks(); // don't count time in menu
     videoMode();
 }
 
@@ -429,6 +465,7 @@ static void console() {
 void dosmain(void) {
     displayInit();
     stb__rand_seed = clockTicks();
+    treeSeed = stb_randLCG();
     lastGameTick = clockTicks();
 
     drawSeasonBackdrop();
