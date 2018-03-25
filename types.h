@@ -7,6 +7,7 @@ typedef byte bool;
 #define false 0
 
 #define MAX_USHORT ( ( 1 << 16 ) - 1 )
+#define MAX_UINT ( (uint) -1 )
 
 //###################################################
 

@@ -51,7 +51,7 @@ struct {
     .population = 1000,
     .workers = 300,
     .gatherers = 700,
-    .draftTo = NO_WORK,
+    .draftTo = GATHERER,
 
     .growRate = 100,
 
@@ -109,9 +109,6 @@ void nextSeason() {
 
 //###################################################
 
-// ~18 clock ticks per second
-#define CLOCK_TICKS_PER_GAME_TICK ( 10 * 18 )
-
 // prevent overflow in add; return 'spillage'
 static ushort checkedAdd(ushort* val, ushort inc, ushort limit) {
     if(limit-inc > *val) {
@@ -136,6 +133,79 @@ static ushort checkedSub(ushort* val, ushort dec) {
     }
 }
 
+static void printLabeled(char* str, ushort n) {
+    print(str);
+    print_ushort(n);
+    endl();
+}
+
+//###################################################
+
+bool evt_birdFlock() {
+    if(season == WINTER)
+        return false;
+
+    textMode();
+    println("A flock of birds attacked our gatherers!$");
+    ushort casualties = 234 + ( stb_randLCG() & 0xfff);
+    casualties = MIN(hive.gatherers/2, casualties); // limit damage
+    printLabeled("Casualties: $", casualties);
+    hive.population -= casualties;
+    hive.gatherers -= casualties;
+
+    return true;
+}
+
+bool evt_bear() {
+    if(hive.honeyStores < 1000)
+        return false;
+
+    textMode();
+    println("A bear raided our hive!$");
+    ushort casualties = 1234 + ( stb_randLCG() & 0x2fff);
+    casualties = MIN(hive.workers/2, casualties); // limit damage
+    printLabeled("Casualties: $", casualties);
+    hive.population -= casualties;
+    hive.workers -= casualties;
+
+    ushort spoils = 999 + ( stb_randLCG() & 0xfff);
+    spoils = MIN( 3 * (hive.honeyStores/4), spoils );
+    printLabeled("Honey lost: $", spoils);
+    hive.honeyStores -= spoils;
+
+    ushort damage = spoils + ( stb_randLCG() & 0x1ff);
+    damage = MIN(3*(hive.cells/4), damage);
+    printLabeled("Cells destroyed: $", damage);
+    hive.cells -= damage;
+
+    return true;
+}
+
+bool evt_goodHarvest() {
+    if(season == WINTER)
+        return false;
+
+    textMode();
+    println("The good weather increased our honey harvest!$");
+    ushort extraHoney = hive.gatherers / 4;
+    // TODO could spill a lot
+    checkedAdd(&hive.honeyStores, extraHoney, hive.cells);
+
+    return true;
+}
+
+typedef bool (*eventFun)(void);
+
+static eventFun events[] = {&evt_birdFlock, &evt_bear, &evt_goodHarvest};
+
+// chance that any given event occurs; about 1%
+#define EVENT_PROBABILITY ( MAX_UINT / 128 )
+
+//###################################################
+
+// ~18 clock ticks per second
+#define CLOCK_TICKS_PER_GAME_TICK ( 10 * 18 )
+
 static uint lastGameTick;
 
 // Wikipedia:
@@ -150,14 +220,17 @@ static void gameTick() {
         return;
 
     lastGameTick = clockTicks();
-    if(seasonTicks >= GAME_TICKS_PER_SEASON) {
-        nextSeason();
-        textMode();
-        print("It is now $");
-        println(seasonStr[season]);
-        console();
+
+    uint p = stb_randLCG();
+    bool eventTriggered = false;
+    for(ushort e = 0; e < sizeof(events)/sizeof(eventFun); ++e) {
+        if(p < EVENT_PROBABILITY) {
+            eventTriggered = (*(events[e]))();
+            break;
+        } else
+            p -= EVENT_PROBABILITY;
     }
-    ++seasonTicks;
+
 
     ushort newHoney;
     switch(season) {
@@ -181,6 +254,11 @@ static void gameTick() {
 
         starved = checkedSub(&hive.workers, starved);
         checkedSub(&hive.gatherers, starved);
+
+        if(!eventTriggered) // don't want to clear event text
+            textMode();
+        eventTriggered = true;
+        printLabeled("We do not have enough honey. Bees starved: $", starved);
     }
 
     if(hive.population == 0) {
@@ -214,7 +292,13 @@ static void gameTick() {
     hive.honeyStores -= CEIL_DIV(newCells, 4);
 
     // if there was spillage earlier, try storing it now
-    checkedAdd(&hive.honeyStores, newHoney, hive.cells);
+    newHoney = checkedAdd(&hive.honeyStores, newHoney, hive.cells);
+    if(newHoney) {
+        if(!eventTriggered) // don't want to clear event text
+            textMode();
+        eventTriggered = true;
+        println("Not all gathered honey could be stored. Consider planning more cells.$");
+    }
 
     // some bees die naturally
     ushort died = hive.workers / 128;
@@ -227,6 +311,19 @@ static void gameTick() {
 
     died = unassignedBees() / 128;
     hive.population -= died;
+
+    ++seasonTicks;
+    if(seasonTicks >= GAME_TICKS_PER_SEASON) {
+        nextSeason();
+        if(!eventTriggered) // don't want to clear event text
+            textMode();
+        eventTriggered = true;
+        print("It is now $");
+        println(seasonStr[season]);
+    }
+
+    if(eventTriggered)
+        console();
 }
 
 //###################################################
@@ -318,12 +415,6 @@ static void drawBees() {
 }
 
 //###################################################
-
-static void printLabeled(char* str, ushort n) {
-    print(str);
-    print_ushort(n);
-    endl();
-}
 
 void printHiveStatus() {
     print("The season is $");
