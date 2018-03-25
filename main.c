@@ -73,6 +73,8 @@ static enum {
     WINTER
 } season = SPRING;
 
+static char* seasonStr[] = { [SPRING] = "Spring$", [SUMMER] = "Summer$", [AUTUMN] = "Autumn$", [WINTER] = "Winter$" };
+
 #define GAME_TICKS_PER_SEASON 60
 static ushort seasonTicks; // game ticks elapsed in current season
 
@@ -90,6 +92,7 @@ static ushort screenBees[N_SCREEN_BEES] = {[0 ... N_SCREEN_BEES-1] = (HIVE_CENTE
 
 static void drawSeasonBackdrop();
 static void drawHive();
+static void console();
 
 void nextSeason() {
     season = ( season + 1 ) % 4;
@@ -143,8 +146,13 @@ static void gameTick() {
         return;
 
     lastGameTick = clockTicks();
-    if(seasonTicks >= GAME_TICKS_PER_SEASON)
+    if(seasonTicks >= GAME_TICKS_PER_SEASON) {
         nextSeason();
+        textMode();
+        print("It is now $");
+        println(seasonStr[season]);
+        console();
+    }
     ++seasonTicks;
 
     ushort newHoney = hive.gatherers / 2;
@@ -299,6 +307,8 @@ static void printLabeled(char* str, ushort n) {
 }
 
 void printHiveStatus() {
+    print("The season is $");
+    println(seasonStr[season]);
     printLabeled("Population $", hive.population);
     printLabeled("Workers $", hive.workers);
     printLabeled("Gatherers $", hive.gatherers);
@@ -411,7 +421,6 @@ void consoleHelp() {
 }
 
 static void console() {
-    textMode();
     println("What do you want to do? ('help' for list of commands)$");
     while(true) {
         prompt();
@@ -480,8 +489,10 @@ void dosmain(void) {
         drawBees();
 
         while(keyInputAvailable()) {
-            if(readASCII_blocking() == ' ')
+            if(readASCII_blocking() == ' ') {
+                textMode();
                 console();
+            }
         }
 
         //waitMillis(50);
